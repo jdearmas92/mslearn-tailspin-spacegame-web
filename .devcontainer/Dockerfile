@@ -1,36 +1,47 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Base: Ubuntu 22.04 (.NET 6 SDK, multi-arch)
+# ─────────────────────────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/devcontainers/dotnet:6.0-jammy
 
-# Install NodeJS
-# [Choice] Node.js version: none, lts/*, 18, 16, 14
-ARG NODE_VERSION="16"
-RUN if [ "${NODE_VERSION}" != "none" ]; then su vscode -c "umask 0002 && . /usr/local/share/nvm/nvm.sh && nvm install ${NODE_VERSION} 2>&1"; fi
+ARG DEBIAN_FRONTEND=noninteractive
+USER root
 
-# Install Gulp
+# ─────────────────────────────────────────────────────────────────────────────
+# Node 16  +  Gulp CLI
+# ─────────────────────────────────────────────────────────────────────────────
+ARG NODE_VERSION=16
+RUN bash -c 'source /usr/local/share/nvm/nvm.sh && nvm install '"$NODE_VERSION"
 RUN npm install --global gulp-cli
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Azure CLI
+# ─────────────────────────────────────────────────────────────────────────────
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
-# [Optional] Install zsh
-ARG INSTALL_ZSH="true"
-# [Optional] Upgrade OS packages to their latest versions
-ARG UPGRADE_PACKAGES="false"
+# ─────────────────────────────────────────────────────────────────────────────
+# Docker CLI + Compose-v2
+# ─────────────────────────────────────────────────────────────────────────────
+RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+        gpg --dearmor -o /usr/share/keyrings/docker.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] \
+        https://download.docker.com/linux/ubuntu jammy stable" \
+        > /etc/apt/sources.list.d/docker.list && \
+    apt-get update && \
+    apt-get install -y docker-ce-cli docker-compose-plugin && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install needed packages and setup non-root user. Use a separate RUN statement to add your own dependencies.
-ARG USERNAME=vscode
-ARG USER_UID=1000
-ARG USER_GID=$USER_UID
-COPY library-scripts/*.sh /tmp/library-scripts/
-RUN bash /tmp/library-scripts/common-debian.sh "${INSTALL_ZSH}" "${USERNAME}" "${USER_UID}" "${USER_GID}" "${UPGRADE_PACKAGES}" "true" "true"
+# ─────────────────────────────────────────────────────────────────────────────
+# Non-root vscode user (already exists in base image)
+# ─────────────────────────────────────────────────────────────────────────────
+USER vscode
+WORKDIR /home/vscode
 
-# cd into the user directory, download and unzip the Azure DevOps agent
-RUN cd /home/vscode && mkdir azure-pipelines && cd azure-pipelines
-
-# input Azure DevOps agent arguments
-ARG ARCH="x64"
-ARG AGENT_VERSION="3.229.1"
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Azure Pipelines agent 3.229.1 – auto-detect architecture
+# ─────────────────────────────────────────────────────────────────────────────
+ARG AGENT_VERSION=3.229.1
 RUN mkdir -p /home/vscode/azure-pipelines && \
-    cd /home/vscode/azure-pipelines && \
+    cd       /home/vscode/azure-pipelines && \
     dpkgArch="$(dpkg --print-architecture)" && \
     case "$dpkgArch" in \
         amd64) agentArch="x64" ;; \
@@ -43,15 +54,5 @@ RUN mkdir -p /home/vscode/azure-pipelines && \
     tar xzf vstsagent.tar.gz && \
     ./bin/installdependencies.sh
 
-
-# copy over the start.sh script
 COPY library-scripts/start.sh /home/vscode/azure-pipelines/start.sh
-
-# Apply ownership of home folder
-RUN chown -R vscode ~vscode
-
-# make the script executable
 RUN chmod +x /home/vscode/azure-pipelines/start.sh
-
-# Clean up
-RUN rm -rf /var/lib/apt/lists/* /tmp/library-scripts
