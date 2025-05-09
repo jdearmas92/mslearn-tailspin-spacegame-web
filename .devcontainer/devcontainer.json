@@ -28,8 +28,7 @@
     // Amend Azure Pipelines agent version and arch type with 'ARCH' and 'AGENT_VERSION'. https://github.com/microsoft/azure-pipelines-agent/releases.
     "build": {
         "args": {
-            "UPGRADE_PACKAGES": "true",
-            "AGENT_VERSION": "3.229.1"
+            "UPGRADE_PACKAGES": "true"
         }
     },
     "features": {
